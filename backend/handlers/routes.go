@@ -12,5 +12,7 @@ func SetupRoutes(handler *LinkHandler) *http.ServeMux {
 
 	mux.HandleFunc("GET /{slug}", handler.RedirectURL)
 
+	// mux.HandleFunc("GET /api/v1/analytics/{slug}", handler.Analytics)
+
 	return mux
 }
