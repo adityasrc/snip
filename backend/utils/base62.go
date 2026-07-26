@@ -20,7 +20,7 @@ func ConvertToBase62(id int) string {
 	}
 
 	// reverse the result
-	for i, j := 0, len(base62); i < j; i, j = i+1, j-1 {
+	for i, j := 0, len(base62)-1; i < j; i, j = i+1, j-1 {
 		base62[i], base62[j] = base62[j], base62[i]
 	}
 
