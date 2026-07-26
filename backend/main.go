@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	// "fmt"
 	"log"
 	"net/http"
 	"os"
@@ -10,10 +10,6 @@ import (
 	"github.com/adityasrc/snip/backend/handlers"
 	"github.com/joho/godotenv"
 )
-
-func ping(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Pong\n")
-}
 
 func main() {
 
@@ -27,7 +23,7 @@ func main() {
 
 	//database connection
 	db, err := database.Connect(dbURL)
-	handler := &handlers.LinkHandler{DB: db}
+	LinkHandler := &handlers.LinkHandler{DB: db}
 	if err != nil {
 		log.Println(err)
 		os.Exit(1)
@@ -36,22 +32,10 @@ func main() {
 	log.Println("Db connected")
 	defer db.Close()
 
-	// DefaultServeMux
-	// http.HandleFunc("/ping", ping)
-	// log.Println("Server is running on port 4000")
-	// if err := http.ListenAndServe(":4000", nil); err != nil {
-	// 	log.Fatal(err)
-	// }
-
-	// custom Mux
-	mux := http.NewServeMux()
-	mux.HandleFunc("/ping", ping)
-
-	mux.HandleFunc("POST /api/v1/shorten", handler.CreateShortLink)
+	mux := handlers.SetupRoutes(LinkHandler)
 
 	log.Println("Server is running on port 4000")
 	if err := http.ListenAndServe(":4000", mux); err != nil {
 		log.Fatal(err)
 	}
-
 }

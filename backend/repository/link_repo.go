@@ -24,3 +24,13 @@ func SaveLink(db *pgxpool.Pool, id int, url string, slug string) error {
 
 	return err
 }
+
+func GetLink(db *pgxpool.Pool, slug string) (string, error) {
+
+	query := "SELECT link FROM links WHERE slug = $1"
+
+	var longURl string
+	err := db.QueryRow(context.Background(), query, slug).Scan(&longURl)
+
+	return longURl, err
+}

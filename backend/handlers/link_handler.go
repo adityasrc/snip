@@ -3,17 +3,20 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"strings"
+
 	"github.com/adityasrc/snip/backend/repository"
 	"github.com/adityasrc/snip/backend/utils"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"net/http"
 )
 
-type ShortentRequest struct {
+type RequestPayload struct {
 	LongURL string `json:"long_url"` // json tag
+
 }
 
-type ShortenResponse struct {
+type ResponsePayload struct {
 	ShortURL string `json:"short_url"`
 }
 
@@ -24,38 +27,52 @@ type LinkHandler struct {
 // function as method
 func (h *LinkHandler) CreateShortLink(w http.ResponseWriter, r *http.Request) {
 
-	var req ShortentRequest
+	var req RequestPayload
 
 	// Decoding the json request
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
+		utils.JSONError(w, "Invalid JSON payload", http.StatusBadRequest)
 		return
+	}
+
+	if req.LongURL == "" {
+		utils.JSONError(w, "URL cannot be empty", http.StatusBadRequest)
+		return
+	}
+
+	if !strings.HasPrefix(req.LongURL, "http://") && !strings.HasPrefix(req.LongURL, "https://") {
+		req.LongURL = "https://" + req.LongURL
 	}
 
 	id, err := repository.GetNextID(h.DB)
 	if err != nil {
-		fmt.Println("GetNextID Error:", err)
-		http.Error(w, "failed to generate id", http.StatusInternalServerError)
+		utils.JSONError(w, "Failed to generate id", http.StatusInternalServerError)
 		return
 	}
 
 	slug := utils.ConvertToBase62(id)
-	fmt.Println("Inserting:", id, req.LongURL, slug)
 	linkErr := repository.SaveLink(h.DB, id, req.LongURL, slug)
 
 	if linkErr != nil {
 		fmt.Println("SaveLink Error:", linkErr)
-		http.Error(w, "failed to create short_url", http.StatusInternalServerError)
+		utils.JSONError(w, "Failed to create short_url", http.StatusInternalServerError)
 		return
 	}
 
-	resp := ShortenResponse{ShortURL: "localhost:4000/" + slug}
+	res := ResponsePayload{ShortURL: "localhost:4000/" + slug}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	json.NewEncoder(w).Encode(res)
 
-	// fmt.Println("Received URL:", req.LongURL)
+}
 
-	// w.WriteHeader(http.StatusOK)
-	// w.Write([]byte("URL received successfully"))
+func (h *LinkHandler) RedirectURL(w http.ResponseWriter, r *http.Request) {
 
+	slug := r.PathValue("slug")
+	longURL, err := repository.GetLink(h.DB, slug)
+
+	if err != nil {
+		http.Error(w, "Invalid link", http.StatusInternalServerError)
+	}
+
+	http.Redirect(w, r, longURL, http.StatusTemporaryRedirect)
 }
