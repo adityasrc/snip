@@ -22,15 +22,14 @@ func main() {
 	log.Println(dbURL)
 
 	//database connection
-	db, err := database.Connect(dbURL)
-	LinkHandler := &handlers.LinkHandler{DB: db}
+	db, geoReader, err := database.Connect(dbURL)
+	LinkHandler := &handlers.LinkHandler{DB: db, Geo: geoReader}
 	if err != nil {
-		log.Println(err)
-		os.Exit(1)
+		log.Fatalf("Connection failed: %v", err)
 	}
 
-	log.Println("Db connected")
 	defer db.Close()
+	defer geoReader.Close()
 
 	mux := handlers.SetupRoutes(LinkHandler)
 
