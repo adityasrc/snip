@@ -5,21 +5,24 @@ import (
 	"log"
 	"strconv"
 	// "fmt"
-	"net"
-	"net/http"
-	"strings"
-	"time"
-
 	"github.com/adityasrc/snip/backend/repository"
 	"github.com/adityasrc/snip/backend/utils"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mssola/user_agent"
 	"github.com/oschwald/geoip2-golang"
+	"golang.org/x/crypto/bcrypt"
+	"net"
+	"net/http"
+	"strings"
+	"time"
 )
 
 type RequestPayload struct {
 	LongURL   string `json:"long_url"`              // json tag
 	ExpiresIn int    `json:"expiry_date,omitempty"` // TTL in seconds
+	Email     string `json:"email"`
+	Name      string `json:"name"`
+	Password  string `json:"password"`
 }
 
 type ResponsePayload struct {
@@ -174,5 +177,49 @@ func (h *LinkHandler) Analytics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(res)
+}
+
+func (h *LinkHandler) Signup(w http.ResponseWriter, r *http.Request) {
+
+	var req RequestPayload
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.JSONError(w, "Invalid JSON payload", http.StatusBadRequest)
+		return
+	}
+
+	if req.Email == "" || req.Name == "" || req.Password == "" {
+		utils.JSONError(w, "Invalid Credentials", http.StatusBadRequest)
+		return
+	}
+
+	if isUser := repository.CheckMail(h.DB, req.Email); isUser != false {
+		utils.JSONError(w, "User already Exists", http.StatusConflict)
+		return
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost) // dc is 10
+
+	if err != nil {
+		utils.JSONError(w, "Invalid Password", http.StatusBadRequest)
+		return
+	}
+	email := strings.ToLower(req.Email)
+
+	if err := repository.CreateUser(h.DB, req.Name, email, hash); err != nil {
+		log.Println("DB Insert Error:", err)
+		utils.JSONError(w, "Something went wrong", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("content-type", "application/json")
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *LinkHandler) Signin(w http.ResponseWriter, r *http.Request) {
+
+}
+
+func (h *LinkHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 
 }

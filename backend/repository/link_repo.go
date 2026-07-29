@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	// "testing/quick"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -114,4 +115,26 @@ func CountHandler(db *pgxpool.Pool, linkID int) (int, error) {
 	}
 
 	return count, nil
+}
+
+func CheckMail(db *pgxpool.Pool, mail string) bool {
+	var userId int
+	query := `SELECT 1 FROM users WHERE email = $1`
+
+	err := db.QueryRow(context.Background(), query, mail).Scan(userId)
+
+	if err != nil {
+		return false
+	}
+
+	return true
+}
+
+func CreateUser(db *pgxpool.Pool, name string, email string, password []byte) error {
+
+	query := `INSERT INTO users (name, email, password_hash) VALUES ($1, $2, $3)`
+
+	_, err := db.Exec(context.Background(), query, name, email, string(password))
+
+	return err
 }
