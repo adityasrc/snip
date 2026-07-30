@@ -1,21 +1,28 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"strconv"
+
 	// "fmt"
 	"github.com/adityasrc/snip/backend/repository"
 	"github.com/adityasrc/snip/backend/utils"
 	"github.com/go-playground/validator/v10"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	// "github.com/joho/godotenv"
+	"net"
+	"net/http"
+	"os"
+	"strings"
+	"time"
+
 	"github.com/mssola/user_agent"
 	"github.com/oschwald/geoip2-golang"
 	"golang.org/x/crypto/bcrypt"
-	"net"
-	"net/http"
-	"strings"
-	"time"
 )
 
 type RequestPayload struct {
@@ -36,19 +43,68 @@ type LinkHandler struct {
 	Validate *validator.Validate
 }
 
-// type StatItem struct {
-// 	Name  string `json:"name"`
-// 	Count int    `json:"count"`
-// }
+// We add jwt.RegisteredClaims as an embedded type, to provide fields like expiry time
+type Claims struct {
+	Email string `json:"email"`
+	Role  string `json:"role"`
+	jwt.RegisteredClaims
+}
 
-// type DashboardResponse struct {
-// 	TotalClicks int        `json:"totalClicks"`
-// 	Countries   []StatItem `json:"countries"`
-// 	OS          []StatItem `json:"os"`
-// 	Browsers    []StatItem `json:"browsers"`
-// 	Device      []StatItem `json:"devices"`
-// 	Referers    []StatItem `json:"referers"`
-// }
+// middleware signature
+type Middleware func(http.Handler) http.Handler
+
+type contextKey string
+
+const UserEmailKey contextKey = "email"
+const UserRoleKey contextKey = "role"
+
+// middleware function
+func AuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		var jwtKey = []byte(os.Getenv("JWT_SECRET_KEY"))
+		c, err := r.Cookie("token") // fetch token
+		if err != nil {
+			if err == http.ErrNoCookie {
+				// If the cookie is not set, return an unauthorized status
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		tokenStr := c.Value
+
+		claims := &Claims{} // new instance of Claims
+
+		token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (any, error) {
+			return jwtKey, nil
+		})
+
+		if err != nil {
+			if err == jwt.ErrSignatureInvalid {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		if !token.Valid {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), UserEmailKey, claims.Email)
+		ctx = context.WithValue(ctx, UserRoleKey, claims.Role)
+
+		r = r.WithContext(ctx)
+
+		next.ServeHTTP(w, r)
+
+	})
+}
 
 // function as method
 func (h *LinkHandler) CreateShortLink(w http.ResponseWriter, r *http.Request) {
@@ -84,7 +140,13 @@ func (h *LinkHandler) CreateShortLink(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slug := utils.ConvertToBase62(id)
-	linkErr := repository.SaveLink(h.DB, id, req.LongURL, slug, expiry)
+	userEmail, _ := r.Context().Value(UserEmailKey).(string)
+	if userEmail == "" {
+		utils.JSONError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	linkErr := repository.SaveLink(h.DB, id, req.LongURL, slug, expiry, userEmail)
 
 	if linkErr != nil {
 		utils.JSONError(w, "Failed to create short_url", http.StatusInternalServerError)
@@ -223,6 +285,7 @@ func (h *LinkHandler) Signup(w http.ResponseWriter, r *http.Request) {
 func (h *LinkHandler) Signin(w http.ResponseWriter, r *http.Request) {
 
 	var req RequestPayload
+	var jwtKey = []byte(os.Getenv("JWT_SECRET_KEY"))
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		utils.JSONError(w, "Invalid JSON payload", http.StatusBadRequest)
@@ -236,7 +299,7 @@ func (h *LinkHandler) Signin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pass, err := repository.Signin(h.DB, req.Email)
+	pass, role, err := repository.Signin(h.DB, req.Email)
 	if err != nil {
 		utils.JSONError(w, "Invalid Email or Password", http.StatusUnauthorized)
 		return
@@ -248,7 +311,32 @@ func (h *LinkHandler) Signin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("content-type", "application/json")
+	expirationTime := time.Now().Add(5760 * time.Minute) // 4 days
+
+	claims := &Claims{
+		Email: req.Email,
+		Role:  role,
+		RegisteredClaims: jwt.RegisteredClaims{
+			// In JWT, the expiry time is expressed as unix milliseconds
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+		},
+	}
+
+	// Declare the token with the algorithm used for signing, and the claims
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	tokenString, err := token.SignedString(jwtKey)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:    "token",
+		Value:   tokenString,
+		Expires: expirationTime,
+	})
+
 	w.WriteHeader(http.StatusOK)
 
 }
@@ -256,7 +344,3 @@ func (h *LinkHandler) Signin(w http.ResponseWriter, r *http.Request) {
 func (h *LinkHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 
 }
-
-// func validateInput(name string, password string) error {
-
-// }

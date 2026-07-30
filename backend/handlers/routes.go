@@ -8,7 +8,8 @@ func SetupRoutes(handler *LinkHandler) *http.ServeMux {
 	// custom Mux
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("POST /api/v1/shorten", handler.CreateShortLink)
+	// mux.HandleFunc("POST /api/v1/shorten", handler.CreateShortLink)
+	mux.Handle("POST /api/v1/shorten", AuthMiddleware(http.HandlerFunc(handler.CreateShortLink)))
 
 	mux.HandleFunc("GET /{slug}", handler.RedirectURL)
 

@@ -34,11 +34,11 @@ func GetNextID(db *pgxpool.Pool) (int, error) { // sql.BD is database connection
 	return id, err
 }
 
-func SaveLink(db *pgxpool.Pool, id int, url string, slug string, exp_date *time.Time) error {
+func SaveLink(db *pgxpool.Pool, id int, url string, slug string, exp_date *time.Time, email string) error {
 
-	query := "INSERT INTO links (id, link, slug, expiry_date) VALUES ($1, $2, $3, $4)"
+	query := "INSERT INTO links (id, link, slug, expiry_date, user_email) VALUES ($1, $2, $3, $4, $5)"
 
-	_, err := db.Exec(context.Background(), query, id, url, slug, exp_date) // _ is a blank identifier to ignore result
+	_, err := db.Exec(context.Background(), query, id, url, slug, exp_date, email) // _ is a blank identifier to ignore result
 
 	return err
 }
@@ -128,17 +128,18 @@ func Signup(db *pgxpool.Pool, name string, email string, password []byte) error 
 	return err
 }
 
-func Signin(db *pgxpool.Pool, email string) ([]byte, error) {
+func Signin(db *pgxpool.Pool, email string) ([]byte, string, error) {
 
 	var pass string
+	var role string
 
-	query := `SELECT password_hash FROM users WHERE email = $1`
+	query := `SELECT password_hash, role FROM users WHERE email = $1`
 
-	err := db.QueryRow(context.Background(), query, email).Scan(&pass)
+	err := db.QueryRow(context.Background(), query, email).Scan(&pass, &role)
 
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return []byte(pass), nil
+	return []byte(pass), role, nil
 
 }
