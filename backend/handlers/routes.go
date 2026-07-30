@@ -16,7 +16,7 @@ func SetupRoutes(handler *LinkHandler) *http.ServeMux {
 
 	mux.HandleFunc("POST /api/v1/signup", handler.Signup)
 
-	// mux.HandleFunc("POST /api/v1/signin", handler.Signin)
+	mux.HandleFunc("POST /api/v1/signin", handler.Signin)
 
 	// mux.HandleFunc("GET /api/v1/user/{id}", handler.GetUser)
 

@@ -3,22 +3,11 @@ package repository
 import (
 	"context"
 	"fmt"
-	// "testing/quick"
 	"time"
 
+	// "github.com/adityasrc/snip/backend/utils"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-// type Click struct {
-// 	userAgent   string
-// 	referer     string
-// 	ipAddress   string
-// 	os          string
-// 	browser     string
-// 	device      string
-// 	countryName string
-// 	isBot       bool
-// }
 
 type StatItem struct {
 	Name  string `json:"name"`
@@ -130,11 +119,26 @@ func CheckMail(db *pgxpool.Pool, mail string) bool {
 	return true
 }
 
-func CreateUser(db *pgxpool.Pool, name string, email string, password []byte) error {
+func Signup(db *pgxpool.Pool, name string, email string, password []byte) error {
 
 	query := `INSERT INTO users (name, email, password_hash) VALUES ($1, $2, $3)`
 
 	_, err := db.Exec(context.Background(), query, name, email, string(password))
 
 	return err
+}
+
+func Signin(db *pgxpool.Pool, email string) ([]byte, error) {
+
+	var pass string
+
+	query := `SELECT password_hash FROM users WHERE email = $1`
+
+	err := db.QueryRow(context.Background(), query, email).Scan(&pass)
+
+	if err != nil {
+		return nil, err
+	}
+	return []byte(pass), nil
+
 }

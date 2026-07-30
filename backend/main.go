@@ -8,6 +8,7 @@ import (
 
 	"github.com/adityasrc/snip/backend/database"
 	"github.com/adityasrc/snip/backend/handlers"
+	"github.com/go-playground/validator/v10"
 	"github.com/joho/godotenv"
 )
 
@@ -23,7 +24,7 @@ func main() {
 
 	//database connection
 	db, geoReader, err := database.Connect(dbURL)
-	LinkHandler := &handlers.LinkHandler{DB: db, Geo: geoReader}
+	LinkHandler := &handlers.LinkHandler{DB: db, Geo: geoReader, Validate: validator.New()}
 	if err != nil {
 		log.Fatalf("Connection failed: %v", err)
 	}

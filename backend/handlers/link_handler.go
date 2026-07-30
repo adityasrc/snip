@@ -7,6 +7,7 @@ import (
 	// "fmt"
 	"github.com/adityasrc/snip/backend/repository"
 	"github.com/adityasrc/snip/backend/utils"
+	"github.com/go-playground/validator/v10"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mssola/user_agent"
 	"github.com/oschwald/geoip2-golang"
@@ -20,9 +21,9 @@ import (
 type RequestPayload struct {
 	LongURL   string `json:"long_url"`              // json tag
 	ExpiresIn int    `json:"expiry_date,omitempty"` // TTL in seconds
-	Email     string `json:"email"`
+	Email     string `json:"email" validate:"required,email"`
 	Name      string `json:"name"`
-	Password  string `json:"password"`
+	Password  string `json:"password" validate:"required,min=8,max=32"`
 }
 
 type ResponsePayload struct {
@@ -30,8 +31,9 @@ type ResponsePayload struct {
 }
 
 type LinkHandler struct {
-	DB  *pgxpool.Pool
-	Geo *geoip2.Reader
+	DB       *pgxpool.Pool
+	Geo      *geoip2.Reader
+	Validate *validator.Validate
 }
 
 // type StatItem struct {
@@ -188,7 +190,9 @@ func (h *LinkHandler) Signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Email == "" || req.Name == "" || req.Password == "" {
+	err := h.Validate.Struct(req)
+
+	if err != nil {
 		utils.JSONError(w, "Invalid Credentials", http.StatusBadRequest)
 		return
 	}
@@ -206,7 +210,7 @@ func (h *LinkHandler) Signup(w http.ResponseWriter, r *http.Request) {
 	}
 	email := strings.ToLower(req.Email)
 
-	if err := repository.CreateUser(h.DB, req.Name, email, hash); err != nil {
+	if err := repository.Signup(h.DB, req.Name, email, hash); err != nil {
 		log.Println("DB Insert Error:", err)
 		utils.JSONError(w, "Something went wrong", http.StatusInternalServerError)
 		return
@@ -218,8 +222,41 @@ func (h *LinkHandler) Signup(w http.ResponseWriter, r *http.Request) {
 
 func (h *LinkHandler) Signin(w http.ResponseWriter, r *http.Request) {
 
+	var req RequestPayload
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.JSONError(w, "Invalid JSON payload", http.StatusBadRequest)
+		return
+	}
+
+	err := h.Validate.Struct(req)
+
+	if err != nil {
+		utils.JSONError(w, "Invalid Credentials", http.StatusBadRequest)
+		return
+	}
+
+	pass, err := repository.Signin(h.DB, req.Email)
+	if err != nil {
+		utils.JSONError(w, "Invalid Email or Password", http.StatusUnauthorized)
+		return
+	}
+
+	err = bcrypt.CompareHashAndPassword(pass, []byte(req.Password))
+	if err != nil {
+		utils.JSONError(w, "Invalid Email or Password", http.StatusUnauthorized)
+		return
+	}
+
+	w.Header().Set("content-type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
 }
 
 func (h *LinkHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 
 }
+
+// func validateInput(name string, password string) error {
+
+// }
