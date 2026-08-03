@@ -23,6 +23,14 @@ type DashboardResponse struct {
 	Referers    []StatItem `json:"referers"`
 }
 
+type ModelResponse struct {
+	Id          int    `json:"id"`
+	Link        string `json:"link"`
+	Slug        string `json:"slug"`
+	CreatedAt   string `json:"created_at"`
+	ExpiresDate string `json:"expires_at"`
+}
+
 func GetNextID(db *pgxpool.Pool) (int, error) { // sql.BD is database connection pool
 
 	query := "SELECT nextVal('links_id_seq')"
@@ -142,4 +150,50 @@ func Signin(db *pgxpool.Pool, email string) ([]byte, string, error) {
 	}
 	return []byte(pass), role, nil
 
+}
+
+func Dashboard(db *pgxpool.Pool, email string) ([]ModelResponse, error) {
+
+	response := make([]ModelResponse, 0)
+
+	query := `SELECT id, link, slug, created_at, expiry_date FROM links WHERE  user_email = $1`
+
+	rows, err := db.Query(context.Background(), query, email)
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var id int
+	var link string
+	var slug string
+	var createdAt time.Time
+	var expiryDate *time.Time
+
+	for rows.Next() {
+		if err := rows.Scan(&id, &link, &slug, &createdAt, &expiryDate); err != nil {
+			return nil, err
+		}
+
+		var expStr string
+		if expiryDate != nil {
+			expStr = expiryDate.Format(time.RFC3339)
+		}
+
+		val := ModelResponse{
+			Id:          id,
+			Link:        link,
+			Slug:        slug,
+			CreatedAt:   createdAt.Format(time.RFC3339),
+			ExpiresDate: expStr,
+		}
+		response = append(response, val)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return response, nil
 }

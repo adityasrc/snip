@@ -20,7 +20,6 @@ func main() {
 	}
 
 	dbURL := os.Getenv("DATABASE_URL")
-	log.Println(dbURL)
 
 	//database connection
 	db, geoReader, err := database.Connect(dbURL)

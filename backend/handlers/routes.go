@@ -19,7 +19,17 @@ func SetupRoutes(handler *LinkHandler) *http.ServeMux {
 
 	mux.HandleFunc("POST /api/v1/signin", handler.Signin)
 
-	// mux.HandleFunc("GET /api/v1/user/{id}", handler.GetUser)
+	mux.Handle("GET /api/v1/links", AuthMiddleware(http.HandlerFunc(handler.GetMyLinks)))
+
+	// mux.HandleFunc("DELETE /api/v1/link/{id}", )
+
+	// mux.HandleFunc("PUT /api/v1/link/{id}", )
+
+	mux.HandleFunc("POST /api/v1/logout", handler.Logout)
+
+	// mux.HandleFunc("GET /api/v1/analytics/dashboard")
+
+	mux.HandleFunc("GET /ping", handler.Ping)
 
 	return mux
 }

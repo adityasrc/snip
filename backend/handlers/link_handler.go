@@ -50,6 +50,11 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
+// type Health struct {
+// 	Status  string `json:"status"`
+// 	Message string `json:"message"`
+// }
+
 // middleware signature
 type Middleware func(http.Handler) http.Handler
 
@@ -341,6 +346,71 @@ func (h *LinkHandler) Signin(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func (h *LinkHandler) GetUser(w http.ResponseWriter, r *http.Request) {
+func (h *LinkHandler) Ping(w http.ResponseWriter, r *http.Request) {
 
+	res := map[string]string{
+		"status":  "ok",
+		"message": "Server is up and running",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(res); err != nil {
+		utils.JSONError(w, "Failed to encode JSON", http.StatusInternalServerError)
+	}
+
+}
+
+func (h *LinkHandler) Logout(w http.ResponseWriter, r *http.Request) {
+
+	cookie := http.Cookie{
+		Name:     "token",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1, // -1 ka matlab hai browser isko turant delete kar de
+		HttpOnly: true,
+	}
+
+	http.SetCookie(w, &cookie)
+
+	res := map[string]string{
+		"status":  "ok",
+		"message": "Logged out successfully",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(res); err != nil {
+		utils.JSONError(w, "Failed to encode JSON", http.StatusInternalServerError)
+	}
+
+}
+
+func (h *LinkHandler) GetMyLinks(w http.ResponseWriter, r *http.Request) {
+
+	rawEmail := r.Context().Value(UserEmailKey)
+
+	email, ok := rawEmail.(string)
+
+	if !ok {
+		utils.JSONError(w, "Unauthorized: Email not found in context", http.StatusUnauthorized)
+		return
+	}
+
+	links, err := repository.Dashboard(h.DB, email)
+
+	if err != nil {
+		utils.JSONError(w, "Couldn't fetch links", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(links); err != nil {
+		utils.JSONError(w, "Couldn't fetch links", http.StatusInternalServerError)
+		return
+	}
 }
